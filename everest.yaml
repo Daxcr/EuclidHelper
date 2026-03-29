@@ -1,0 +1,6 @@
+- Name: EuclidHelper
+  Version: 0.1.0
+  DLL: bin/EuclidHelper.dll
+  Dependencies:
+    - Name: EverestCore
+      Version: 1.5935.0
