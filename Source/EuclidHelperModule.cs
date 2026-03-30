@@ -1,4 +1,5 @@
 ﻿using System;
+using Celeste.Mod.EuclidHelper.Entities;
 
 namespace Celeste.Mod.EuclidHelper;
 
@@ -26,10 +27,15 @@ public class EuclidHelperModule : EverestModule {
     }
 
     public override void Load() {
-        // TODO: apply any hooks that should always be active
+        Everest.Events.Level.OnLoadLevel += OnLoadLevel;
     }
 
     public override void Unload() {
-        // TODO: unapply any hooks applied in Load()
+        Everest.Events.Level.OnLoadLevel -= OnLoadLevel;
+    }
+
+    private void OnLoadLevel(Level level, Player.IntroTypes playerIntro, bool isFromLoader)
+    {
+        Portal.inPortal = null;
     }
 }

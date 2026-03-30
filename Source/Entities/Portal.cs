@@ -9,7 +9,7 @@ namespace Celeste.Mod.EuclidHelper.Entities;
 [CustomEntity("EuclidHelper/Portal")]
 public class Portal : Entity
 {
-    static Portal inPortal;
+    public static Portal inPortal;
     static RenderTarget2D[] renderTargets = new RenderTarget2D[10];
     Camera camera;
     static int PortalDepth = 0;
@@ -50,7 +50,6 @@ public class Portal : Entity
     }
     public override void Update()
     {
-        base.Update();
         LoopDistance += LoopSpeed * Engine.DeltaTime;
         if (LoopDistance.X > Scale.X)
             LoopDistance.X -= Scale.X;
@@ -108,6 +107,7 @@ public class Portal : Entity
                 entity.Position += node - Position;
             }
         }
+        base.Update();
     }
     public override void Render()
     {
