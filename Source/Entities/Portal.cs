@@ -3,6 +3,9 @@ using Celeste.Mod.Entities;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Monocle;
+using System.Reflection;
+using System.Collections.Generic;
+using AsmResolver;
 
 namespace Celeste.Mod.EuclidHelper.Entities;
 
@@ -102,9 +105,23 @@ public class Portal : Entity
 
         foreach (var entity in Scene.Entities)
         {
-            if (entity != this && CollideCheck(entity) && entity is not Player && entity is not Portal && entity is not PortalSafeSolid)
+            if (entity != this && CollideCheck(entity) && entity is not Player && entity is not Portal && entity is not PortalSafeSolid && entity is not SolidTiles && entity is not BackgroundTiles)
             {
-                entity.Position += node - Position;
+                if (entity is Solid solid && solid.HasPlayerRider())
+                {
+                    if (inPortal == null)
+                    {
+                        Player player = solid.GetPlayerRider();
+                        player.Position += node - Position;
+                        inPortal = this;
+                        camera.Position += node - Position;
+
+                        entity.Position += node - Position;
+                    }
+                } else
+                {
+                    entity.Position += node - Position;
+                }
             }
         }
         base.Update();
@@ -137,6 +154,7 @@ public class Portal : Entity
                 Draw.SpriteBatch.Draw(renderTargets[i - 1], Vector2.Zero, Color.White);
                 Draw.SpriteBatch.End();
             }
+
             Draw.SpriteBatch.Begin(
                 SpriteSortMode.Deferred,
                 BlendState.AlphaBlend,
@@ -148,7 +166,7 @@ public class Portal : Entity
             );
             foreach (var entity in Scene.Entities)
             {
-                if (!entity.TagCheck(Tags.HUD))
+                if (!entity.TagCheck(Tags.HUD) && entity.Visible)
                 {
                     entity.Render();
                     if (CollideCheck(entity) && entity is not Portal && entity is not PortalSafeSolid)
