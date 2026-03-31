@@ -3,9 +3,8 @@ using Celeste.Mod.Entities;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Monocle;
-using System.Reflection;
-using System.Collections.Generic;
-using AsmResolver;
+using System.Linq;
+
 
 namespace Celeste.Mod.EuclidHelper.Entities;
 
@@ -26,6 +25,7 @@ public class Portal : Entity
     public Vector2 node;
     Vector2 InitPosition;
     Vector2 InnerInitPosition;
+    static readonly Type[] Blacklist = [typeof(Player), typeof(Portal), typeof(PortalSafeSolid), typeof(SolidTiles), typeof(BackgroundTiles)];
     public Portal(EntityData data, Vector2 offset)
         : base(data.Position + offset)
     {
@@ -105,7 +105,7 @@ public class Portal : Entity
 
         foreach (var entity in Scene.Entities)
         {
-            if (entity != this && CollideCheck(entity) && entity is not Player && entity is not Portal && entity is not PortalSafeSolid && entity is not SolidTiles && entity is not BackgroundTiles)
+            if (entity != this && CollideCheck(entity) && !Blacklist.Contains(entity.GetType()))
             {
                 if (entity is Solid solid && solid.HasPlayerRider())
                 {
@@ -133,13 +133,35 @@ public class Portal : Entity
         PortalDepth = 1;
         Draw.SpriteBatch.End();
         var level = SceneAs<Level>();
+
+        Vector2 lastPortalWorldPos = Vector2.Zero;
+        
         for (int i = 0; i < Targets; i++)
         {
             Engine.Graphics.GraphicsDevice.SetRenderTarget(renderTargets[i]);
             Engine.Graphics.GraphicsDevice.Clear(Color.Transparent);
             Vector2 offset = node - Position;
 
-            camera.Position = Position + (offset * (i + 1));
+            Vector2 portalWorldPos = Position + (offset * (i + 1));
+            lastPortalWorldPos = portalWorldPos;
+
+            Player player = level.Tracker.GetEntity<Player>();
+            Vector2 targetPos = player.Position;
+
+            Vector2 desiredCameraPos = targetPos - new Vector2(320 / 2f, 180 / 2f);
+
+            float viewportWidth = 320f;
+            float viewportHeight = 180f;
+
+            float minCameraX = portalWorldPos.X;
+            float maxCameraX = portalWorldPos.X + Scale.X - viewportWidth;
+            float minCameraY = portalWorldPos.Y;
+            float maxCameraY = portalWorldPos.Y + Scale.Y - viewportHeight;
+
+            float cameraX = Math.Max(minCameraX, Math.Min(desiredCameraPos.X, maxCameraX));
+            float cameraY = Math.Max(minCameraY, Math.Min(desiredCameraPos.Y, maxCameraY));
+
+            camera.Position = new Vector2(cameraX, cameraY);
 
             if (i > 0)
             {
@@ -177,11 +199,14 @@ public class Portal : Entity
                     }
                 }
             }
-            // Draw.Rect(camera.Position.X, camera.Position.Y, Scale.X, Scale.Y, Color.Magenta * 0.1f);
             Draw.SpriteBatch.End();
         }
+        
         PortalDepth = 0;
+
+        Vector2 renderOffset = camera.Position - lastPortalWorldPos;
         camera.Position = originalCamera;
+        
         Engine.Graphics.GraphicsDevice.SetRenderTarget((RenderTarget2D)GameplayBuffers.Gameplay);
         Draw.SpriteBatch.Begin(
             SpriteSortMode.Deferred,
@@ -192,6 +217,6 @@ public class Portal : Entity
             null,
             camera.Matrix
         );
-        Draw.SpriteBatch.Draw(renderTargets[Targets - 1], Position, Color.White);
+        Draw.SpriteBatch.Draw(renderTargets[Targets - 1], Position + renderOffset, null, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
     }
 }
