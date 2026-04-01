@@ -30,7 +30,7 @@ public class Portal : Entity
         : base(data.Position + offset)
     {
         InitPosition = data.Position + offset;
-        Depth = -2147483648;
+        Depth = 2147483647;
         Scale.X = data.Width;
         Scale.Y = data.Height;
 
@@ -49,7 +49,7 @@ public class Portal : Entity
         base.Added(scene);
         camera = SceneAs<Level>().Camera;
         for (int i = 0; i < Targets; i++)
-            renderTargets[i] = new RenderTarget2D(Engine.Graphics.GraphicsDevice, 320, 184);
+            renderTargets[i] = new RenderTarget2D(Engine.Graphics.GraphicsDevice, (int)Math.Max(320, Scale.X), (int)Math.Max(184, Scale.Y));
     }
     public override void Update()
     {
@@ -105,7 +105,7 @@ public class Portal : Entity
             inPortal = null;
         }
 
-        Position = oldPos;
+        Position = oldPos; 
         
         foreach (var entity in Scene.Entities)
         {
