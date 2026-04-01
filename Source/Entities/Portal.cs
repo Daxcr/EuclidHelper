@@ -25,7 +25,9 @@ public class Portal : Entity
     public Vector2 node;
     Vector2 InitPosition;
     Vector2 InnerInitPosition;
-    static readonly Type[] Blacklist = [typeof(Player), typeof(Portal), typeof(PortalSafeSolid), typeof(SolidTiles), typeof(BackgroundTiles)];
+    float cameraX;
+    float cameraY;
+    static readonly Type[] Blacklist = [typeof(Player), typeof(Portal), typeof(PortalSafeSolid), typeof(SolidTiles), typeof(BackgroundTiles), typeof(Decal), typeof(Trigger)];
     public Portal(EntityData data, Vector2 offset)
         : base(data.Position + offset)
     {
@@ -49,7 +51,7 @@ public class Portal : Entity
         base.Added(scene);
         camera = SceneAs<Level>().Camera;
         for (int i = 0; i < Targets; i++)
-            renderTargets[i] = new RenderTarget2D(Engine.Graphics.GraphicsDevice, (int)Math.Max(320, Scale.X), (int)Math.Max(184, Scale.Y));
+            renderTargets[i] = new RenderTarget2D(Engine.Graphics.GraphicsDevice, 320, 184);
     }
     public override void Update()
     {
@@ -85,52 +87,55 @@ public class Portal : Entity
         originalCamera = camera.Position;
 
         Player player = SceneAs<Level>().Tracker.GetEntity<Player>();
-        if (CollideCheck<Player>() && inPortal == null)
-        {
-            inPortal = this;
-            foreach (var follower in player.Leader.Followers)
+        if (player != null)
+            if (CollideCheck<Player>() && inPortal == null)
             {
-                follower.Entity.Position += node - Position;
+                inPortal = this;
+                foreach (var follower in player.Leader.Followers)
+                {
+                    follower.Entity.Position += node - Position;
+                }
+                player.Position += node - Position;
+                camera.Position += node - Position;
             }
-            player.Position += node - Position;
-            camera.Position += node - Position;
-        }
 
         Vector2 oldPos = Position;
 
         Position = node;
 
-        if (inPortal == this && !CollideCheck<Player>())
-        {
-            inPortal = null;
-        }
+        if (player != null)
+            if (inPortal == this && !CollideCheck<Player>())
+            {
+                inPortal = null;
+            }
 
         Position = oldPos; 
         
         foreach (var entity in Scene.Entities)
         {
-            if (entity != this && CollideCheck(entity) && !Blacklist.Contains(entity.GetType()) && !player.Leader.Followers.Any(follower => follower.Entity == entity))
-            {
-                if (entity is Solid solid && solid.HasPlayerRider())
+            if (player != null)
+                if (entity != this && CollideCheck(entity) && !Blacklist.Contains(entity.GetType()) && !player.Leader.Followers.Any(follower => follower.Entity == entity))
                 {
-                    if (inPortal == null)
+                    if (entity is Solid solid && solid.HasPlayerRider())
                     {
-                        player.Position += node - Position;
-                        inPortal = this;
-                        camera.Position += node - Position;
-
-                        foreach (var follower in player.Leader.Followers)
+                        if (inPortal == null)
                         {
-                            follower.Entity.Position += node - Position;
-                        }
+                            player.Position += node - Position;
+                            inPortal = this;
+                            camera.Position += node - Position;
 
+                            foreach (var follower in player.Leader.Followers)
+                            {
+                                follower.Entity.Position += node - Position;
+                            }
+
+                            entity.Position += node - Position;
+                        }
+                    } else
+                    {
                         entity.Position += node - Position;
                     }
-                } else
-                {
-                    entity.Position += node - Position;
                 }
-            }
         }
         base.Update();
     }
@@ -159,8 +164,10 @@ public class Portal : Entity
             float maxCameraX = portalWorldPos.X + Scale.X - viewportWidth;
             float minCameraY = portalWorldPos.Y;
             float maxCameraY = portalWorldPos.Y + Scale.Y - viewportHeight;
-            float cameraX = Math.Max(minCameraX, Math.Min(desiredCameraPos.X, maxCameraX));
-            float cameraY = Math.Max(minCameraY, Math.Min(desiredCameraPos.Y, maxCameraY));
+
+            cameraX = Calc.Clamp(desiredCameraPos.X + offset.X, minCameraX, maxCameraX);
+            cameraY = Calc.Clamp(desiredCameraPos.Y + offset.Y, minCameraY, maxCameraY);
+
             camera.Position = new Vector2((int)Math.Floor(cameraX), (int)Math.Floor(cameraY));
 
             if (i > 0)
@@ -218,5 +225,8 @@ public class Portal : Entity
             camera.Matrix
         );
         Draw.SpriteBatch.Draw(renderTargets[Targets - 1], Position + renderOffset, null, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+
+        // Draw.Rect(cameraX, cameraY, 320f, 184f, Color.Magenta * 0.1f);
+        // Draw.Rect(Position.X + renderOffset.X, Position.Y + renderOffset.Y, 320f, 184f, Color.Red * 0.1f);
     }
 }
