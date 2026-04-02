@@ -43,7 +43,7 @@ public class PortalSafeSolid : Solid
     {
         base.Update();
         Vector2 oldPos = Position;
-        Position = portal.node + offset;
+        Position = portal.node + offset - portal.LoopDistance;
         Vector2 delta = Position - oldPos;
 
         if (HasPlayerRider())

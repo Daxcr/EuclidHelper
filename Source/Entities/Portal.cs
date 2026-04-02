@@ -18,12 +18,12 @@ public class Portal : Entity
     Vector2 originalCamera;
     Vector2 Scale = Vector2.Zero;
     int Targets = 1;
-    Vector2 LoopSpeed = Vector2.Zero;
-    Vector2 InnerLoopSpeed = Vector2.Zero;
-    Vector2 LoopDistance = Vector2.Zero;
-    Vector2 InnerLoopDistance = Vector2.Zero;
+    public Vector2 LoopSpeed = Vector2.Zero;
+    public Vector2 InnerLoopSpeed = Vector2.Zero;
+    public Vector2 LoopDistance = Vector2.Zero;
+    public Vector2 InnerLoopDistance = Vector2.Zero;
     public Vector2 node;
-    Vector2 InitPosition;
+    public Vector2 InitPosition;
     Vector2 InnerInitPosition;
     float cameraX;
     float cameraY;
