@@ -29,7 +29,7 @@ public class PortalSafeSolid : Solid
         {
             if (entity is Portal && entity.CollideCheck(this))
             {
-                this.portal = (Portal)entity;
+                portal = (Portal)entity;
                 break;
             }
         }

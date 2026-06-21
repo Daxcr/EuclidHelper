@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Monocle;
 using System.Linq;
+using System.Collections.Generic;
 
 
 namespace Celeste.Mod.EuclidHelper.Entities;
@@ -12,12 +13,10 @@ namespace Celeste.Mod.EuclidHelper.Entities;
 public class Portal : Entity
 {
     public static Portal inPortal;
-    static RenderTarget2D[] renderTargets = new RenderTarget2D[10];
+    static RenderTarget2D renderTarget = new RenderTarget2D(Engine.Graphics.GraphicsDevice, 320, 184);
     Camera camera;
-    static int PortalDepth = 0;
     Vector2 originalCamera;
     Vector2 Scale = Vector2.Zero;
-    int Targets = 1;
     public Vector2 LoopSpeed = Vector2.Zero;
     public Vector2 InnerLoopSpeed = Vector2.Zero;
     public Vector2 LoopDistance = Vector2.Zero;
@@ -27,6 +26,7 @@ public class Portal : Entity
     Vector2 InnerInitPosition;
     float cameraX;
     float cameraY;
+    public static bool PortalRendering = false;
     static readonly Type[] Blacklist = [typeof(Player), typeof(Portal), typeof(PortalSafeSolid), typeof(SolidTiles), typeof(BackgroundTiles), typeof(Decal), typeof(Trigger)];
     public Portal(EntityData data, Vector2 offset)
         : base(data.Position + offset)
@@ -36,7 +36,6 @@ public class Portal : Entity
         Scale.X = data.Width;
         Scale.Y = data.Height;
 
-        Targets = data.Int("iterations", 1);
         LoopSpeed = new Vector2(data.Float("loopSpeedX", 0f), data.Float("loopSpeedY", 0f));
         InnerLoopSpeed = new Vector2(data.Float("innerLoopSpeedX", 0f), data.Float("innerLoopSpeedY", 0f));
 
@@ -50,9 +49,8 @@ public class Portal : Entity
     {
         base.Added(scene);
         camera = SceneAs<Level>().Camera;
-        for (int i = 0; i < Targets; i++)
-            renderTargets[i] = new RenderTarget2D(Engine.Graphics.GraphicsDevice, 320, 184);
     }
+    public Vector2 GetOffset => node - Position;
     public override void Update()
     {
         LoopDistance += LoopSpeed * Engine.DeltaTime;
@@ -141,75 +139,72 @@ public class Portal : Entity
     }
     public override void Render()
     {
-        if (PortalDepth > 0) return;
-        PortalDepth = 1;
+        if (PortalRendering) return;
+        PortalRendering = true;
         Draw.SpriteBatch.End();
-        Vector2 lastPortalWorldPos = Vector2.Zero;
         
         Vector2 mainCameraPos = camera.Position;
-        
-        for (int i = 0; i < Targets; i++)
+        Vector2 offset = node - Position;
+
+        List<Entity> touching = new();
+
+        foreach (Entity entity in Scene.Entities)
         {
-            Engine.Graphics.GraphicsDevice.SetRenderTarget(renderTargets[i]);
-            Engine.Graphics.GraphicsDevice.Clear(Color.Transparent);
-            Vector2 offset = node - Position;
-            Vector2 portalWorldPos = Position + (offset * (i + 1));
-            lastPortalWorldPos = portalWorldPos;
-            
-            Vector2 desiredCameraPos = mainCameraPos;
-            
-            float viewportWidth = 320f;
-            float viewportHeight = 184f;
-            float minCameraX = portalWorldPos.X;
-            float maxCameraX = portalWorldPos.X + Scale.X - viewportWidth;
-            float minCameraY = portalWorldPos.Y;
-            float maxCameraY = portalWorldPos.Y + Scale.Y - viewportHeight;
-
-            cameraX = Calc.Clamp(desiredCameraPos.X + offset.X, minCameraX, maxCameraX);
-            cameraY = Calc.Clamp(desiredCameraPos.Y + offset.Y, minCameraY, maxCameraY);
-
-            camera.Position = new Vector2((int)Math.Floor(cameraX), (int)Math.Floor(cameraY));
-
-            if (i > 0)
+            if (CollideCheck(entity) && entity is not Portal && entity is not PortalSafeSolid && !entity.TagCheck(Tags.HUD) && entity.Visible)
             {
-                Draw.SpriteBatch.Begin(
-                    SpriteSortMode.Deferred,
-                    BlendState.AlphaBlend,
-                    SamplerState.PointClamp,
-                    DepthStencilState.None,
-                    RasterizerState.CullNone,
-                    null
-                );
-                Draw.SpriteBatch.Draw(renderTargets[i - 1], Vector2.Zero, Color.White);
-                Draw.SpriteBatch.End();
+                touching.Add(entity);
+                entity.Position += offset;
             }
-
-            Draw.SpriteBatch.Begin(
-                SpriteSortMode.Deferred,
-                BlendState.AlphaBlend,
-                SamplerState.PointClamp,
-                DepthStencilState.None,
-                RasterizerState.CullNone,
-                null,
-                camera.Matrix
-            );
-            foreach (var entity in Scene.Entities)
-            {
-                if (!entity.TagCheck(Tags.HUD) && entity.Visible)
-                {
-                    entity.Render();
-                    if (CollideCheck(entity) && entity is not Portal && entity is not PortalSafeSolid)
-                    {
-                        entity.Position += offset;
-                        entity.Render();
-                        entity.Position -= offset;
-                    }
-                }
-            }
-            Draw.SpriteBatch.End();
         }
+
+        Engine.Graphics.GraphicsDevice.SetRenderTarget(renderTarget);
+        Engine.Graphics.GraphicsDevice.Clear(Color.Transparent);
+        Vector2 portalWorldPos = Position + (offset * (0 + 1));
+        Vector2 lastPortalWorldPos = portalWorldPos;
         
-        PortalDepth = 0;
+        Vector2 desiredCameraPos = mainCameraPos;
+        
+        float viewportWidth = 320f;
+        float viewportHeight = 184f;
+        float minCameraX = portalWorldPos.X;
+        float maxCameraX = portalWorldPos.X + Scale.X - viewportWidth;
+        float minCameraY = portalWorldPos.Y;
+        float maxCameraY = portalWorldPos.Y + Scale.Y - viewportHeight;
+
+        cameraX = Calc.Clamp(desiredCameraPos.X + offset.X, minCameraX, maxCameraX);
+        cameraY = Calc.Clamp(desiredCameraPos.Y + offset.Y, minCameraY, maxCameraY);
+
+        camera.Position = new Vector2((int)Math.Floor(cameraX), (int)Math.Floor(cameraY));
+
+        Draw.SpriteBatch.Begin(
+            SpriteSortMode.Deferred,
+            BlendState.AlphaBlend,
+            SamplerState.PointClamp,
+            DepthStencilState.None,
+            RasterizerState.CullNone,
+            null
+        );
+        Draw.SpriteBatch.Draw(renderTarget, Vector2.Zero, Color.White);
+        Draw.SpriteBatch.End();
+
+        Draw.SpriteBatch.Begin(
+            SpriteSortMode.Deferred,
+            BlendState.AlphaBlend,
+            SamplerState.PointClamp,
+            DepthStencilState.None,
+            RasterizerState.CullNone,
+            null,
+            camera.Matrix
+        );
+
+        foreach (Entity entity in Scene.Entities
+            .Where(e => !e.TagCheck(Tags.HUD) && e.Visible)
+            .OrderByDescending(e => e.Depth))
+        {
+            entity.Render();
+        }
+
+        Draw.SpriteBatch.End();
 
         Vector2 renderOffset = camera.Position - lastPortalWorldPos;
         camera.Position = originalCamera;
@@ -224,7 +219,14 @@ public class Portal : Entity
             null,
             camera.Matrix
         );
-        Draw.SpriteBatch.Draw(renderTargets[Targets - 1], Position + renderOffset, null, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+        Draw.SpriteBatch.Draw(renderTarget, Position + renderOffset, null, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
+
+        foreach (Entity entity in touching)
+        {
+            entity.Position -= offset;
+        }
+
+        PortalRendering = false;
 
         // Draw.Rect(cameraX, cameraY, 320f, 184f, Color.Magenta * 0.1f);
         // Draw.Rect(Position.X + renderOffset.X, Position.Y + renderOffset.Y, 320f, 184f, Color.Red * 0.1f);
