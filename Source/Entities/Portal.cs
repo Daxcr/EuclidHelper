@@ -49,6 +49,7 @@ public class Portal : Entity
     {
         base.Added(scene);
         camera = SceneAs<Level>().Camera;
+
         EuclidHelperModule.portalCache.Add(this);
     }
     public override void Removed(Scene scene)

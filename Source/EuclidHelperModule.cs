@@ -36,16 +36,54 @@ public class EuclidHelperModule : EverestModule {
     public override void Load() {
         Everest.Events.Level.OnLoadLevel += OnLoadLevel;
         On.Monocle.Entity.Render += OnEntityRender;
+        On.Monocle.Collide.Check_Entity_Entity += OnCollideCheckEntities;
     }
 
     public override void Unload() {
         Everest.Events.Level.OnLoadLevel -= OnLoadLevel;
         On.Monocle.Entity.Render -= OnEntityRender;
+        On.Monocle.Collide.Check_Entity_Entity -= OnCollideCheckEntities;
+    }
+
+    private bool OnCollideCheckEntities(On.Monocle.Collide.orig_Check_Entity_Entity orig, Entity a, Entity b)
+    {
+        if (orig(a, b)) return true;
+
+        if (a is Portal || b is Portal) return orig(a, b);
+        if (Recolliding || portalCache.Count == 0) return false;
+
+        Recolliding = true;
+        try
+        {
+            foreach (Portal portal in portalCache)
+            {
+                if (portal.CollideCheck(a))
+                {
+                    a.Position += portal.GetOffset;
+                    bool result = orig(a, b);
+                    a.Position -= portal.GetOffset;
+                    if (result) return true;
+                }
+                if (portal.CollideCheck(b))
+                {
+                    b.Position += portal.GetOffset;
+                    bool result = orig(a, b);
+                    b.Position -= portal.GetOffset;
+                    if (result) return true;
+                }
+            }
+        }
+        finally
+        {
+            Recolliding = false;
+        }
+        return false;
     }
 
     private void OnLoadLevel(Level level, Player.IntroTypes playerIntro, bool isFromLoader)
     {
         portalCache.Clear();
+        portalCache.AddRange(level.Entities.OfType<Portal>());
         Portal.inPortal = null;
     }
 
