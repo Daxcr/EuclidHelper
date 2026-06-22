@@ -49,6 +49,12 @@ public class Portal : Entity
     {
         base.Added(scene);
         camera = SceneAs<Level>().Camera;
+        EuclidHelperModule.portalCache.Add(this);
+    }
+    public override void Removed(Scene scene)
+    {
+        EuclidHelperModule.portalCache.Remove(this);
+        base.Removed(scene);
     }
     public Vector2 GetOffset => node - Position;
     public override void Update()
@@ -112,7 +118,7 @@ public class Portal : Entity
         foreach (var entity in Scene.Entities)
         {
             if (player != null)
-                if (entity != this && CollideCheck(entity) && !Blacklist.Contains(entity.GetType()) && !player.Leader.Followers.Any(follower => follower.Entity == entity))
+                if (entity != this && CollideCheck(entity) && !Blacklist.Contains(entity.GetType()))
                 {
                     if (entity is Solid solid && solid.HasPlayerRider())
                     {
@@ -121,12 +127,6 @@ public class Portal : Entity
                             player.Position += node - Position;
                             inPortal = this;
                             camera.Position += node - Position;
-
-                            foreach (var follower in player.Leader.Followers)
-                            {
-                                follower.Entity.Position += node - Position;
-                            }
-
                             entity.Position += node - Position;
                         }
                     } else
@@ -140,6 +140,10 @@ public class Portal : Entity
     public override void Render()
     {
         if (PortalRendering) return;
+        Rectangle cameraRect = new Rectangle((int)camera.Position.X, (int)camera.Position.Y, 320, 184);
+        Rectangle portalRect = new Rectangle((int)Position.X, (int)Position.Y, (int)Scale.X, (int)Scale.Y);
+        if (!cameraRect.Intersects(portalRect)) return;
+
         PortalRendering = true;
         Draw.SpriteBatch.End();
         
@@ -150,7 +154,7 @@ public class Portal : Entity
 
         foreach (Entity entity in Scene.Entities)
         {
-            if (CollideCheck(entity) && entity is not Portal && entity is not PortalSafeSolid && !entity.TagCheck(Tags.HUD) && entity.Visible)
+            if (CollideCheck(entity) && (entity is not Portal or PortalSafeSolid or SolidTiles or BackgroundTiles) && !entity.TagCheck(Tags.HUD) && entity.Visible)
             {
                 touching.Add(entity);
                 entity.Position += offset;
@@ -176,6 +180,13 @@ public class Portal : Entity
 
         camera.Position = new Vector2((int)Math.Floor(cameraX), (int)Math.Floor(cameraY));
 
+        Rectangle source = new Rectangle(
+            (int)(Position.X - camera.Position.X),
+            (int)(Position.Y - camera.Position.Y),
+            (int)Scale.X,
+            (int)Scale.Y
+        );
+
         Draw.SpriteBatch.Begin(
             SpriteSortMode.Deferred,
             BlendState.AlphaBlend,
@@ -184,7 +195,7 @@ public class Portal : Entity
             RasterizerState.CullNone,
             null
         );
-        Draw.SpriteBatch.Draw(renderTarget, Vector2.Zero, Color.White);
+        Draw.SpriteBatch.Draw(renderTarget, Position, source, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
         Draw.SpriteBatch.End();
 
         Draw.SpriteBatch.Begin(
@@ -198,10 +209,11 @@ public class Portal : Entity
         );
 
         foreach (Entity entity in Scene.Entities
-            .Where(e => !e.TagCheck(Tags.HUD) && e.Visible)
-            .OrderByDescending(e => e.Depth))
+            .Where(entity => !entity.TagCheck(Tags.HUD) && entity.Visible)
+            .OrderByDescending(entity => entity.Depth))
         {
             entity.Render();
+            if (touching.Contains(entity)) entity.Position -= offset;
         }
 
         Draw.SpriteBatch.End();
@@ -220,11 +232,6 @@ public class Portal : Entity
             camera.Matrix
         );
         Draw.SpriteBatch.Draw(renderTarget, Position + renderOffset, null, Color.White, 0f, Vector2.Zero, 1f, SpriteEffects.None, 0f);
-
-        foreach (Entity entity in touching)
-        {
-            entity.Position -= offset;
-        }
 
         PortalRendering = false;
 

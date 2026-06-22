@@ -35,7 +35,11 @@ public class PortalSafeSolid : Solid
         }
         Position = initPos;
         if (portal == null)
-            throw new Exception("PortalSafeSolid must be placed on top of a Portal");
+        {
+            // throw new Exception("PortalSafeSolid must be placed on top of a Portal");
+            RemoveSelf();
+            return;
+        }
 
         offset = Position - portal.Position;
     }
