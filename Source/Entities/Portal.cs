@@ -27,7 +27,12 @@ public class Portal : Entity
     float cameraX;
     float cameraY;
     public static bool PortalRendering = false;
-    static readonly Type[] Blacklist = [typeof(Player), typeof(Portal), typeof(PortalSafeSolid), typeof(SolidTiles), typeof(BackgroundTiles), typeof(Decal), typeof(Trigger)];
+    static readonly Type[] Blacklist = [typeof(Player), typeof(Portal), typeof(SolidTiles), typeof(BackgroundTiles), typeof(Decal), typeof(Trigger)];
+    public int Life = 0;
+    float keepaliveThreshold = 0;
+    float ltKeepalive = 0;
+    float ltKeepaliveTimeout = 60;
+    bool Activated = false;
     public Portal(EntityData data, Vector2 offset)
         : base(data.Position + offset)
     {
@@ -38,6 +43,8 @@ public class Portal : Entity
 
         LoopSpeed = new Vector2(data.Float("loopSpeedX", 0f), data.Float("loopSpeedY", 0f));
         InnerLoopSpeed = new Vector2(data.Float("innerLoopSpeedX", 0f), data.Float("innerLoopSpeedY", 0f));
+
+        ltKeepaliveTimeout = data.Float("longTermKeepalive", 60f);
 
         node = data.Nodes[0] + offset;
         InnerInitPosition = node;
@@ -86,20 +93,65 @@ public class Portal : Entity
         if (InnerLoopDistance.Y < -Scale.Y)
             InnerLoopDistance.Y += Scale.Y;
 
+        if (keepaliveThreshold == 0)
+        {
+            if (Scale.X > Scale.Y)
+                keepaliveThreshold = 0.75f * Scale.X;
+            else
+                keepaliveThreshold = 0.75f * Scale.Y;
+        }
+
+        Player player = SceneAs<Level>().Tracker.GetEntity<Player>();
+        if (player == null) return;
+
+        foreach (Entity entity in EuclidHelperModule.keepaliveCache)
+        {
+            if (entity is SolidTiles or BackgroundTiles) continue;
+            if (Vector2.Distance(entity.Center, Center) < keepaliveThreshold)
+            {
+                Life = 2;
+                Activated = true;
+                ltKeepalive = ltKeepaliveTimeout;
+                if (ltKeepalive == -1) ltKeepalive = 1;
+
+                break;
+            }
+        }
+
+        if (Life > 0)
+        {
+            EuclidHelperModule.activePortalCache.Add(this);
+            Life -= 1;
+        }
+        else
+        {
+            EuclidHelperModule.activePortalCache.Remove(this);
+        }
+
+        Rectangle cameraRect = new Rectangle((int)camera.Position.X, (int)camera.Position.Y, 320, 184);
+        Rectangle portalRect = new Rectangle((int)Position.X, (int)Position.Y, (int)Scale.X, (int)Scale.Y);
+        if (cameraRect.Intersects(portalRect))
+        {
+            Activated = true;
+            ltKeepalive = ltKeepaliveTimeout;
+            if (ltKeepalive == -1) ltKeepalive = 1;
+        } else if (ltKeepaliveTimeout != -1)
+        {
+            ltKeepalive -= Engine.DeltaTime;
+        }
+
+        if (ltKeepalive < 0) Activated = false;
+        if (!Activated) return;
+
         Position = new Vector2((int)Math.Floor(InitPosition.X + LoopDistance.X), (int)Math.Floor(InitPosition.Y + LoopDistance.Y));
         node = new Vector2((int)Math.Floor(InnerInitPosition.X + InnerLoopDistance.X), (int)Math.Floor(InnerInitPosition.Y + InnerLoopDistance.Y));
 
         originalCamera = camera.Position;
 
-        Player player = SceneAs<Level>().Tracker.GetEntity<Player>();
         if (player != null)
             if (CollideCheck<Player>() && inPortal == null)
             {
                 inPortal = this;
-                foreach (var follower in player.Leader.Followers)
-                {
-                    follower.Entity.Position += node - Position;
-                }
                 player.Position += node - Position;
                 camera.Position += node - Position;
             }
@@ -121,26 +173,22 @@ public class Portal : Entity
             if (player != null)
                 if (entity != this && CollideCheck(entity) && !Blacklist.Contains(entity.GetType()))
                 {
-                    if (entity is Solid solid && solid.HasPlayerRider())
-                    {
-                        if (inPortal == null)
-                        {
-                            player.Position += node - Position;
-                            inPortal = this;
-                            camera.Position += node - Position;
-                            entity.Position += node - Position;
-                        }
-                    } else
-                    {
-                        entity.Position += node - Position;
-                    }
+                    entity.Position += node - Position;
                 }
         }
         base.Update();
     }
     public override void Render()
     {
+        if (!Activated) return;
         if (PortalRendering) return;
+
+        if (Life > 0)
+        {
+            // Player player = SceneAs<Level>().Tracker.GetEntity<Player>();
+            // Draw.Circle(Vector2.Lerp(Position, player.Position, 0.93f), 2, Color.Red, 300);
+        }
+
         Rectangle cameraRect = new Rectangle((int)camera.Position.X, (int)camera.Position.Y, 320, 184);
         Rectangle portalRect = new Rectangle((int)Position.X, (int)Position.Y, (int)Scale.X, (int)Scale.Y);
         if (!cameraRect.Intersects(portalRect)) return;
@@ -153,14 +201,15 @@ public class Portal : Entity
 
         List<Entity> touching = new();
 
-        foreach (Entity entity in Scene.Entities)
-        {
-            if (CollideCheck(entity) && (entity is not Portal or PortalSafeSolid or SolidTiles or BackgroundTiles) && !entity.TagCheck(Tags.HUD) && entity.Visible)
+        if (Life != 0)
+            foreach (Entity entity in Scene.Entities)
             {
-                touching.Add(entity);
-                entity.Position += offset;
+                if (CollideCheck(entity) && entity is not (Portal or SolidTiles or BackgroundTiles) && !entity.TagCheck(Tags.HUD) && entity.Visible)
+                {
+                    touching.Add(entity);
+                    entity.Position += offset;
+                }
             }
-        }
 
         Engine.Graphics.GraphicsDevice.SetRenderTarget(renderTarget);
         Engine.Graphics.GraphicsDevice.Clear(Color.Transparent);
